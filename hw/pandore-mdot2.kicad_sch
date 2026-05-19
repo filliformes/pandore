@@ -9574,7 +9574,7 @@
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
@@ -9613,7 +9613,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "-"
+		(property "Datasheet" "https://www.te.com/commerce/DocumentDelivery/DDEController?Action=srchrtrv&DocNm=2199230&DocType=Customer%20Drawing&DocLang=English&PartCntxt=2199230-2&DocFormat=pdf"
 			(at 135.89 264.16 0)
 			(hide yes)
 			(show_name no)
@@ -9635,7 +9635,7 @@
 				)
 			)
 		)
-		(property "MPN" "-"
+		(property "MPN" "2199230-2"
 			(at 135.89 257.81 0)
 			(hide yes)
 			(show_name no)
@@ -9646,7 +9646,7 @@
 				)
 			)
 		)
-		(property "MFG" "-"
+		(property "MFG" "TE"
 			(at 154.305 257.81 0)
 			(hide yes)
 			(show_name no)
@@ -9658,7 +9658,7 @@
 				(justify left)
 			)
 		)
-		(property "Link" "-"
+		(property "Link" "https://www.te.com/en/product-2199230-2.html"
 			(at 173.99 257.81 0)
 			(hide yes)
 			(show_name no)
