@@ -383,6 +383,67 @@ Mic/Line Input → THS4521 Diff Amp + OPA1656 → Input Buffer → CS4272 ADC
   - Footprint: `reekilib_pot:bourns_PTR902` (same for both shaft lengths)
 - Independent from line outputs
 
+#### Verified from Rev A0 netlist — R273 wiring, isolation, and the rotary switch
+
+R273 is an 8-pad part: two audio gangs plus a rotary switch. Pad → net, from
+`pandore.kicad_pcb`:
+
+| Pad | Net | Function |
+|---|---|---|
+| 1 | `Net-(U34A-OUT)` | L signal in, from OPA1656 `U34A` |
+| 2 | `Net-(R264-Pad1)` | **L wiper** → `R264` (5.1 kΩ) |
+| 3 | `Net-(U36A-IN-)` | `U36A` inverting input |
+| 4 | `Net-(U35A-OUT)` | R signal in, from `U35A` |
+| 5 | `Net-(R269-Pad1)` | **R wiper** → `R269` (5.1 kΩ) |
+| 6 | `Net-(U36B-IN-)` | `U36B` inverting input |
+| 7 | `AV5` | rotary switch pole |
+| 8 | `Net-(U34A-V+)` | rotary switch pole → monitor op-amp V+ rail |
+
+Both wipers feed 5.1 kΩ resistors into an OPA1656 summing junction — a
+Baxandall-style **active** volume control, not a plain divider to ground.
+This is why the monitor path keeps its noise performance at low settings.
+
+**The pot cannot be read by any processor, and must not be wired to one.**
+Neither wiper reaches an ADC anywhere on the board. The whole monitor chain
+(`U34`/`U35`/`U36`, the pot) runs on `AV5` referenced to **`AVSS`** — the
+isolated analog domain. Exactly 12 components bridge `VSS` (digital) and
+`AVSS`, and every one is either an isolator or a barrier capacitor:
+
+- `U23` ISO7762 (I²S), `U24` ISO1640 (I²C), `U12` NXE2S1212 (isolated DC/DC)
+- `C105`–`C109`, `C210`–`C213` — AC coupling across the barrier
+
+There is **no 0 Ω link, ferrite, or star point** joining the two grounds; they
+are separate at DC. Running a wire from a wiper to a Teensy or MCU ADC would
+short the barrier, destroying the 5000 V<sub>RMS</sub> isolation and injecting
+digital ground noise into the analog ground — which is precisely what the
+isolation exists to prevent, and what the 114 dB dynamic-range figure depends
+on.
+
+**If you want software-readable volume, use one of these instead:**
+
+1. **Encoder + codec digital volume (recommended).** The Mgmt MCU already owns
+   the encoder and can write the CS4272 DAC volume registers (`0x04`/`0x05`)
+   over the existing isolated I²C. Affects both outputs, no new hardware, no
+   isolation compromise. The analog pot stays as the final headphone trim
+   after the DAC, which is the correct place for it.
+2. **I²C ADC on the isolated side.** `EXP8` is a populated 2-pin header on
+   `CTL.SDA`/`CTL.SCL` — the codec side of `U24`, already in the AVSS domain.
+   An ADS1115 there (powered from `AV3P3`/`AV5`, buffered off the wiper) is
+   readable through the isolator that is already in place. Note that bus
+   carries **ERR-001**, so any add-on must follow the same swapped convention
+   as the codec (its SCL to `EXP8.2`, its SDA to `EXP8.1`).
+3. **Digital pot or VCA** in the signal path, commanded over the isolated I²C.
+   Rev B territory.
+
+**Rotary switch — live, and a bring-up gotcha.** Pads 7/8 sit in parallel with
+`R275`, which links `AV5` to the monitor op-amps' V+ rail. `R275` is **0 Ω and
+marked DNP**, so on Rev A0 boards the switch is *not* bypassed: the monitor
+op-amps are powered only when the switch is closed. **If the headphone output
+is dead, check the knob is not at the off detent before suspecting the
+amplifier.** Fitting a 0 Ω at `R275` defeats the switch and makes the monitor
+stage always-on. The switch is not connected to any MCU either, so it cannot
+be read in software.
+
 ### Audio Power Rails
 
 | Rail | Description |
