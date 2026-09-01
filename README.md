@@ -91,35 +91,42 @@ Pandore is a custom-designed PCB built around the [LattePanda Mu](https://www.la
 |---|---|
 | Diodes AP63356Q (×2) | Synchronous buck converters (3.5A), main DC-DC regulation |
 | STM LDL212DR (×3) | Ultra-low-dropout LDOs, local clean rails |
-| ETEK ET20162 (×5) | Per-rail 5V load switching, 1A each |
+| ETEK ET20162 (×5) | USB VBUS current-limit load switches, 1A fixed each (U29–U32 = 4 USB-A ports, U33 = Teensy USB host) |
 | TI LM5158RTER | Flyback controller for 48V phantom supply |
 | TI TPS7A4001DGNR | Ultra-low-noise 40V LDO, phantom post-regulation |
 | Murata NXE2S1212MC | 1W isolated 12V DC/DC for audio analog domain |
 
 - Reverse-polarity, overcurrent, and overvoltage protection
-- PTC fuses (Bel Fuse) on USB VBUS
+- USB VBUS overcurrent handled by the ET20162 load switches (1A fixed limit each)
+- PTC fuses (Bel Fuse 0ZCM0010FF2G, 0.1A) protect the **Grove ports** (J17/J18) on the standby rail
 - Managed power-on sequencing via Management MCU
 
 ### Connectivity
 
 - **Ethernet** — 2× Gigabit Ethernet via Realtek RTL8111H-CG PCIe controllers (U7, U8), 2× shielded RJ45 with isolation transformers (Würth 749020111A)
-- **USB** — 8× USB from LattePanda Mu (3× USB 3.0 + 5× USB 2.0); 2× USB-C receptacles for Teensy 4.1 bridge
+- **USB** — 4× USB-A ports (2× USB 3.0 via J3 + 2× USB 2.0 via J2) broken out from the LattePanda Mu's 8 USB lanes (remaining lanes are internal — Teensy audio bridge, AX210 WiFi/BT); plus 2× USB-C receptacles for the Teensy 4.1 bridge
 - **MIDI** — 5-pin DIN IN/OUT with H11L1 optoisolation
 - **Display** — 24-pin 0.5mm FPC ZIF connector (GCT FFC2A32-24-T) for OLED status display (SSD1309, 128×64 px, 1.54") — see [Components Requiring Separate Assembly](#components-requiring-separate-assembly)
 - **M.2 Key-M** — PCIe x4 (NVMe SSD)
 - **M.2 Key-A+E** — WiFi/Bluetooth (tested: Intel AX210 — WiFi 6E tri-band + BT 5.3) or alternate storage
-- **Expansion headers** — GPIO, analog, I/O breakouts; 2× Grove I2C connectors; I2S header; UART debug
+- **Expansion headers** — GPIO, analog, I/O breakouts; 2× **Grove I2C connectors (3.3V, use Qwiic / STEMMA QT sensors — see below)**; I2S header; UART debug
 
 ### User Interface
 
 - **Encoder:** Bourns PEL12T-4225T-S1024 — 24 PPR optical rotary encoder with momentary push switch and RGB LED illumination
 - **Tactile switches:** 4× C&K PTS810 momentary switches (B1–B4)
-- **Volume knob:** Bourns PTR902-2015K-B103 potentiometer (monitor output level)
+- **Volume knob:** Bourns PTR902-2020K-A103 potentiometer — 10 kΩ audio taper, 20 mm shaft (monitor output level; replaces BOM part 2015K-B103, linear, 15 mm)
 - **RGBA LED:** AMS-OSRAM multi-colour LEDs — blue (×3), green (×4), orange (×7), red (×1) status/indicator outputs
 
 ### Sensors
 
 - **BMI270** — 6-axis IMU (accelerometer + gyroscope) for motion-based control
+
+#### External sensor expansion (Grove ports)
+
+The two Grove connectors (J17/J18) are **I2C sensor ports running at 3.3V** — each on its own management-MCU I2C bus (J17 = I2C0, J18 = I2C1), powered from the standby rail through a 0.1A PTC fuse.
+
+Because the ports are 3.3V, use the **Qwiic / STEMMA QT** sensor ecosystem (SparkFun, Adafruit, Arduino Modulino) — it is 3.3V-native, so modules plug in safely with no level shifting. A standard **Grove-to-Qwiic adapter cable** (Adafruit #4528 or SparkFun PRT-15109) connects them. *Note: M5Stack Units are powered at 5V and are not directly compatible.*
 
 ### Flash Storage
 
@@ -130,8 +137,10 @@ Pandore is a custom-designed PCB built around the [LattePanda Mu](https://www.la
 
 ### Thermal
 
+- 2× 4-pin PWM fan headers (J27 CPU, J38 system), Molex KK 254 47053-1000
+- **Fan header pinout: 1=GND, 2=5V, 3=Tach, 4=PWM** (fed directly from the 5V rail — note: 5V, not the 12V of a standard PC fan header)
 - PWM-controlled fan driver circuit
-- Three heatsink options: active cooler, thin passive, fanless
+- Three heatsink options: active cooler (DFRobot FIT0981, 5V fan), thin passive, fanless
 
 ## Audio Performance
 
