@@ -14,7 +14,7 @@ Expert knowledge for developing firmware, drivers, and software for the Pandore 
 - **Repo:** `<your local clone>/`
 - **GitHub:** `filliformes/pandore`
 - **Design tool:** KiCad 10
-- **Status:** Revision A0 — PCBs **PCBA complete at PCBWay** (3 units), **hand-assembly + bringup in progress** (as of 2026-05-29). PCBWay received last components 2026-05-15. **iBOM and bringup doc published** by Laurence on 2026-05-19 (commit `4497a3b`): [hw/bom/ibom.html](hw/bom/ibom.html) (interactive BOM, open in browser) and [doc/test/bringup/pandore_a0_bringup.md](doc/test/bringup/pandore_a0_bringup.md) (manual-assembly checklist). Manufacturing files released 2026-03-19; PCBA payment to PCBWay 2026-03-24 (~2 446 CAD ≈ 1 310 CAD/unit all-inclusive of BOM). The complete Mouser order for the hand-assembly parts was placed 2026-05-19 — it also included the LattePanda Mu modules, Teensy boards, and active coolers, not just DNP connectors.
+- **Status:** Revision A0 — PCBs **PCBA complete at PCBWay** (3 units), **hand-assembly + bringup in progress** (as of 2026-05-29). PCBWay received last components 2026-05-15. **iBOM and bringup doc published** by Laurence on 2026-05-19 (commit `4497a3b`): [hw/bom/ibom.html](hw/bom/ibom.html) (interactive BOM, open in browser) and [doc/test/bringup/pandore_a0_bringup.md](doc/test/bringup/pandore_a0_bringup.md) (manual-assembly checklist). Manufacturing files released 2026-03-19. The hand-assembly parts order (placed 2026-05-19) also covered the LattePanda Mu modules, Teensy boards, and active coolers, not just DNP connectors.
 - **PCBWay substitution:** RP2350A unavailable; PCBWay substituted **RP2350B (QFN-80)** for both MCU positions (U3, U4). Binary-compatible — same cores, peripherals, memory map. Firmware developed on RP2350A Pico boards transfers without modification. Verify footprint accepts QFN-80 with Laurence.
 - **Design by:** Vincent Fillion at [Artificiel](https://artificiel.org), with Alexandre Burton
 - **Hardware engineering:** Laurence Deschênes Villeneuve ([@laurencedv](https://github.com/laurencedv))
@@ -150,10 +150,10 @@ How Pandore software is actually built, where it lives, and the verified toolcha
 
 ### Firmware repo
 
-The firmware does **not** live in the `pandore` hardware repo (that's KiCad + CERN-OHL-S). It lives in the **`677_pandore` GitLab repo** (`gitlab.artificiel.org/projets/677_pandore`), MIT-licensed:
+The firmware does **not** live in this `pandore` hardware repo (that's KiCad + CERN-OHL-S). It lives in a **separate firmware repo**, MIT-licensed, laid out as:
 
 ```
-677_pandore/
+<firmware-repo>/
   recherche/oled-usb-menu/        research sandbox — OLED menu prototype
     mgmtmcu_menu/                  RP2350 firmware (Pico SDK C)
       src/                         main.c, oled_ssd1309, gfx, font5x7,
@@ -162,7 +162,7 @@ The firmware does **not** live in the `pandore` hardware repo (that's KiCad + CE
     host_bridge/                   LattePanda-side Python (pyserial → Max/Pd/SC)
 ```
 
-> **Status:** the menu firmware is a **throwaway prototype**. The production plan (see `677_pandore/CLAUDE.md`) is a single C++20 daemon that owns all hardware and speaks **binary USB framing** to the two RP2350s ("Slot 0" / "Slot 1"). The prototype's text protocol is for fast iteration; it will be re-homed onto the daemon's binary framing once the concept is proven. Do not expect it to plug into `firmware/slot0` as-is.
+> **Status:** the menu firmware is a **throwaway prototype**. The production plan is a single C++20 daemon that owns all hardware and speaks **binary USB framing** to the two RP2350s ("Slot 0" / "Slot 1"). The prototype's text protocol is for fast iteration; it will be re-homed onto the daemon's binary framing once the concept is proven. Do not expect it to plug into `firmware/slot0` as-is.
 
 ### Verified Windows toolchain (RP2350)
 
@@ -177,7 +177,7 @@ The **only** combination proven to build RP2350 firmware here. Docker and the of
 Key CMake settings: `PICO_BOARD=pico2`, `PICO_PLATFORM=rp2350-arm-s`. Pass `-Dpicotool_DIR=<...>\picotool` so CMake doesn't try to build picotool from source. `build.ps1` wires all of this up and takes `-Target DEVKIT|PANDORE`.
 
 ```powershell
-cd 677_pandore\recherche\oled-usb-menu\mgmtmcu_menu
+cd <firmware-repo>\recherche\oled-usb-menu\mgmtmcu_menu
 .\build.ps1                    # DEVKIT  → build-devkit\mgmtmcu_menu.uf2
 .\build.ps1 -Target PANDORE    # Pandore → build-pandore\mgmtmcu_menu.uf2
 ```
@@ -840,7 +840,7 @@ M2M42, M2AE30, M2M60, M2M80, M2M110 — supports multiple card lengths.
 
 **Interactive BOM:** [hw/bom/ibom.html](hw/bom/ibom.html) — open in browser, click any designator to highlight on the PCB.
 
-Connectors and footprints are on the PCB; the parts themselves must be hand-soldered. The complete Mouser order was placed 2026-05-19 — quantities below are per board × 3 boards. All rows are confirmed against purchase records.
+Connectors and footprints are on the PCB; the parts themselves must be hand-soldered. Quantities below are per board × 3 boards, and reflect the parts actually ordered for the Rev A0 build.
 
 | # | BOM# | Per board | Part | BOM original | Installed | Source | Notes |
 |---|------|-----------|------|-------------|-----------|--------|-------|
@@ -849,7 +849,7 @@ Connectors and footprints are on the PCB; the parts themselves must be hand-sold
 | 3 | 50 | 2 | **Ethernet RJ45** (J8, J9) | Amphenol RJE581885411 | **RJE58-188-5441** (5411 backordered) | Mouser 523-RJE58-188-5441 | 8P8C, dual LEDs (Green/Yellow), Cat5e, same KK254 footprint |
 | 4 | 51 | 2 | **MIDI DIN** (J10, J11) | Same Sky SDS-50J | same | Mouser 490-SDS-50J | 5-pin DIN 180° |
 | 5 | 52 | 1 | **Line out TRS** (J12) | Neutrik NSJ12HF-1 | same | Mouser 568-NSJ12HF-1 | 6.35mm stacking stereo |
-| 6 | 55 | 2 | **GPIO pin header** (J15, J16) | Samtec MTSW-108-22-L-T-330-RA | **same** (MTSW-108, confirmed) | Samtec direct | 3×8 R/A 2.54mm. **Invoice confirms the real 8-pos MTSW-108 was ordered — the "cut-down MTSW-110" alt was NOT used.** |
+| 6 | 55 | 2 | **GPIO pin header** (J15, J16) | Samtec MTSW-108-22-L-T-330-RA | **same** (MTSW-108, confirmed) | Samtec direct | 3×8 R/A 2.54mm. **The real 8-pos MTSW-108 was used — not the "cut-down MTSW-110" alternative.** |
 | 7 | 56 | 2 | **Grove connectors** (J17, J18) | TE 2041145-4 | **TE 440055-4** | Mouser 571-440055-4 | HPI 2.0mm R/A THT, same family |
 | 8 | 105 | 1 | **Headphone vol pot** (R273) | Bourns PTR902-2015K-B103 | **PTR902-2020K-A103** | Mouser 652-PTR902-2020KA103 | Audio taper, 20mm shaft |
 | 9 | — | 1 | **OLED panel** (J25) | — | **REX012864AYAP3N00000** (primary) / MCOT128064B1V-WM (alt) | Mouser 668-REX012864AYAP3N / DigiKey #21322651 | Bare 24-pin FPC panel; J25 ZIF socket is PCBWay-assembled |
