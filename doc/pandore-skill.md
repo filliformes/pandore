@@ -697,7 +697,7 @@ For firmware development before Pandore PCB arrives:
 
 **USB (8 lanes from LattePanda Mu — NOT 8 user-facing ports):**
 
-> **Important distinction.** The LattePanda Mu exposes **8 USB lanes** (logical) to the carrier. Pandore breaks them out into **only 4 user-facing USB-A receptacles**: J2 (USB2-A_2stacked, Same Sky 61400826021) = 2× USB 2.0 ports stacked, and J3 (USB3-A_2stacked, Amphenol 1003-004-01010) = 2× USB 3.0 ports stacked. The remaining lanes are routed internally (Teensy audio bridge, Intel AX210 WiFi/BT M.2 module, etc.). Plus 2× USB-C receptacles (J28/J29, PCBWay-assembled) for the Teensy 4.1 audio/MIDI bridge. **When writing for non-technical audiences (sub, paper, presentation): say "4 USB-A ports + 2 USB-C", not "8 USB".**
+> **Important distinction.** The LattePanda Mu exposes **8 USB lanes** (logical) to the carrier. Pandore breaks them out into **only 4 user-facing USB-A receptacles**: J2 (USB2-A_2stacked, Same Sky 61400826021) = 2× USB 2.0 ports stacked, and J3 (USB3-A_2stacked, Amphenol 1003-004-01010) = 2× USB 3.0 ports stacked. The remaining lanes are routed internally (Teensy audio bridge, Intel AX210 WiFi/BT M.2 module, etc.). The only panel USB-C is the **Teensy 4.1's own onboard USB-C jack**, exposed at the back panel; J28/J29 are **not** USB-C receptacles — they are CPG-23 pogo pins that tap the Teensy's underside USB-D± pads (see Physical Audio I/O). **When writing for non-technical audiences (sub, paper, presentation): say "4 USB-A ports + 1 USB-C (Teensy)", not "8 USB".**
 
 | Lane | Type | Description |
 |------|------|-------------|
@@ -963,7 +963,7 @@ Reference: [doc/test/bringup/pandore_a0_bringup.md](doc/test/bringup/pandore_a0_
 |------|---------|---------|---------|
 | `V12` | 12V | — | LattePanda Mu core |
 | `V5` | 5V | **2A budgeted (10W); 3.5A silicon** | From buck U19 (AP63356Q, FB 158k/30k → 5.01V). Digital peripherals, USB VBUS (4 ports ×1A + Teensy 1A = 5A of switch capacity oversubscribing the rail), **fan headers** |
-| `V3P3` | 3.3V | 2A budgeted; 3.5A silicon | From buck U20 (AP63356Q, FB 93.1k/30k → 3.28V). MCUs, codec digital, I/O. Also feeds `VRTIO` (hard-wired to V3P3) on the GPIO headers |
+| `V3P3` | 3.3V | 3A budgeted (10W); 3.5A silicon | From buck U20 (AP63356Q, FB 93.1k/30k → 3.28V). MCUs, codec digital, I/O. Also feeds `VRTIO` (hard-wired to V3P3) on the GPIO headers |
 | `AV5` | 5V | — | Analog audio supply |
 | `AV3P3` | 3.3V | — | Analog audio supply |
 | `VM2` | — | — | M.2 slot supply |

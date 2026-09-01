@@ -8,7 +8,7 @@ Pandore is a custom-designed PCB built around the [LattePanda Mu](https://www.la
 
 ## Status
 
-**Revision A0** — PCBs fabricated (3 units). Manufacturing files released 2026-03-19. DRC passing, all components sourced.
+**Revision A0** — PCBA complete at PCBWay (3 units); hand-assembly of the through-hole/DNP parts and board bring-up in progress. Manufacturing files released 2026-03-19; DRC passing. See the [interactive BOM](hw/bom/ibom.html) and the [A0 bring-up / hand-assembly guide](doc/test/bringup/pandore_a0_bringup.md).
 
 > **PCBWay substitution:** RP2350A was unavailable at assembly time; PCBWay substituted **RP2350B (QFN-80)** for both MCU positions. RP2350A and RP2350B are binary-compatible — same cores, same peripherals, same memory map — they differ only in package size and number of exposed GPIO pins (30 vs 48). Firmware developed on RP2350A Pico boards transfers without modification.
 
@@ -68,7 +68,7 @@ Pandore is a custom-designed PCB built around the [LattePanda Mu](https://www.la
 - **Phantom power:** 48V supply via TI LM5158 flyback controller + TPS7A4001 ultra-low-noise 40V LDO post-regulation (~10 mA) for condenser microphones
 - **I2S isolation:** TI ISO7762FDBQR — 6-channel digital isolator (4 forward / 2 reverse), 100 Mbps, 5000 VRMS galvanic isolation between digital and audio domains
 - **I2C isolation:** TI ISO1640BDR — isolated I2C for codec control path, 2500 VRMS isolation
-- **Isolated power:** Murata NXE2S1212MC — 1W isolated 12V→12V DC/DC converter for the isolated audio domain
+- **Isolated power:** Murata NXE2S1212MC-R7 — 2W isolated 12V→12V DC/DC converter (167 mA) for the isolated audio domain
 - **MIDI isolation:** Isocom H11L1SMT optoisolator with Schmitt-trigger output on MIDI IN
 - **Monitor output:** Dedicated headphone/speaker amplifier with hardware volume knob (Bourns PTR902-2020K-A103 — 10 kΩ audio taper, 20 mm shaft)
 - **Input buffering:** Balanced input stage with line/mic switching
@@ -94,7 +94,7 @@ Pandore is a custom-designed PCB built around the [LattePanda Mu](https://www.la
 | ETEK ET20162 (×5) | USB VBUS current-limit load switches, 1A fixed each (U29–U32 = 4 USB-A ports, U33 = Teensy USB host) |
 | TI LM5158RTER | Flyback controller for 48V phantom supply |
 | TI TPS7A4001DGNR | Ultra-low-noise 40V LDO, phantom post-regulation |
-| Murata NXE2S1212MC | 1W isolated 12V DC/DC for audio analog domain |
+| Murata NXE2S1212MC-R7 | 2W isolated 12V DC/DC (167 mA) for audio analog domain |
 
 - Reverse-polarity, overcurrent, and overvoltage protection
 - USB VBUS overcurrent handled by the ET20162 load switches (1A fixed limit each)
@@ -104,7 +104,7 @@ Pandore is a custom-designed PCB built around the [LattePanda Mu](https://www.la
 ### Connectivity
 
 - **Ethernet** — 2× Gigabit Ethernet via Realtek RTL8111H-CG PCIe controllers (U7, U8), 2× shielded RJ45 with isolation transformers (Würth 749020111A)
-- **USB** — 4× USB-A ports (2× USB 3.0 via J3 + 2× USB 2.0 via J2) broken out from the LattePanda Mu's 8 USB lanes (remaining lanes are internal — Teensy audio bridge, AX210 WiFi/BT); plus 2× USB-C receptacles for the Teensy 4.1 bridge
+- **USB** — 4× USB-A ports (2× USB 3.0 via J3 + 2× USB 2.0 via J2) broken out from the LattePanda Mu's 8 USB lanes (remaining lanes are internal — Teensy audio bridge, AX210 WiFi/BT); plus the Teensy 4.1's own USB-C jack exposed at the back panel
 - **MIDI** — 5-pin DIN IN/OUT with H11L1 optoisolation
 - **Display** — 24-pin 0.5mm FPC ZIF connector (GCT FFC2A32-24-T) for OLED status display (SSD1309, 128×64 px, 1.54") — see [Components Requiring Separate Assembly](#components-requiring-separate-assembly)
 - **M.2 Key-M** — PCIe x4 (NVMe SSD)
@@ -183,14 +183,15 @@ The PCBWay PCBA order covers all SMD components. The following through-hole and 
 |------|-----------|-----|-------------|-----------------|-------|
 | 40 | 1 | E1 | Encoder + RGB LED + switch | Bourns **PEL12T-4225T-S1024** | 24 PPR, push switch, RGB illuminated |
 | 47 | 2 | J4, J5 | Mic/Line input combo jack | Neutrik **NCJ9FI-H-0** | XLR + 6.35mm TRS + 3-way switch |
-| 50 | 2 | J8, J9 | Ethernet RJ45 | Amphenol **RJE58-188-5411** | 8P8C shielded, dual LEDs, Cat5e |
+| 50 | 2 | J8, J9 | Ethernet RJ45 | Amphenol **RJE58-188-5441** | 8P8C shielded, dual LEDs, Cat5e (replaces BOM -5411, backordered; same footprint) |
 | 51 | 2 | J10, J11 | MIDI DIN | Same Sky **SDS-50J** | 5-pin DIN 180° |
 | 52 | 1 | J12 | Line output TRS | Neutrik **NSJ12HF-1** | 6.35mm stacking stereo |
 | 55 | 2 | J15, J16 | GPIO expansion header | Samtec **MTSW-108-22-L-T-330-RA** | 3×8 right-angle, 2.54mm pitch |
 | 56 | 2 | J17, J18 | Grove connectors | TE **440055-4** | HPI 2.0mm R/A THT (replaces BOM 2041145-4, same family) |
 | 105 | 1 | R273 | Headphone volume pot | Bourns **PTR902-2020K-A103** | Audio taper, 20mm shaft (replaces BOM 2015K-B103, linear, 15mm) |
 | — | 1 | J25 | OLED display panel | **Microtips REX012864AYAP3N00000** (primary) or Midas MCOT128064B1V-WM (alt) | SSD1309, 128×64, 24-pin 0.5mm FPC; J25 ZIF socket is PCBWay-assembled |
-| — | 1 | J28/J29 | Audio/MIDI bridge module | **PJRC Teensy 4.1** | J28/J29 USB-C receptacles are PCBWay-assembled |
+| — | 1 | U9 | Audio/MIDI bridge module | **PJRC Teensy 4.1** (SparkFun DEV-20359, headerless) | Mounted on Samtec TSW headers; its own USB-C jack is exposed at the panel |
+| — | 2 | J28, J29 | Teensy USB-D± pogo pins | Same Sky **CPG-23-SMT-TR** | Spring contacts tapping the Teensy's underside USB-D+/D− pads — **not** USB-C receptacles; hand-soldered |
 | — | 1 | J13 | NVMe SSD | User choice | M.2 2280 Key-M, PCIe x4 |
 | — | 1 | J19 | WiFi/BT module | **Intel AX210** (WiFi 6E + BT 5.3) | M.2 2230 Key-E |
 
