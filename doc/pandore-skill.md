@@ -611,7 +611,7 @@ Connected to the LattePanda Mu for system-level control.
 | 2 | VLSS | Analog ground | VSS |
 | 3 | VSS | Ground | VSS |
 | 4 | NC | No connection | — |
-| 5 | VDD | Logic supply (2.8–3.3V) | V3P3 rail |
+| 5 | VDD | Logic supply (2.8–3.3V) | **VSTBY** rail (≈3.3V standby, LDO U27) — verified from Rev A0 netlist |
 | 6 | BS1 | Interface select | VSS (= 0 for SPI) |
 | 7 | BS2 | Interface select | VSS (= 0 for SPI) |
 | 8 | CS# | Chip select (active low) | Management MCU GPIO |
@@ -624,13 +624,13 @@ Connected to the LattePanda Mu for system-level control.
 | 15 | D2 | SPI: NC | — |
 | 16–20 | D3–D7 | Unused in SPI (tie low) | VSS |
 | 21 | IREF | Segment current ref | Resistor to VSS (set 10 µA) |
-| 22 | VCOMH | COM deselected voltage | 4.7 µF cap to VSS |
-| 23 | VCC | Display drive (12–13V) | V12 rail + 4.7 µF cap |
+| 22 | VCOMH | COM deselected voltage | **10 µF** cap to VSS (C230) — verified from Rev A0 netlist |
+| 23 | VCC | Display drive (12–13V) | `V12` rail + **10 µF (C231) ‖ 100 nF (C228)** — verified from Rev A0 netlist |
 | 24 | NC (GND) | No connection | GND |
 
 #### Power Integration with Pandore
 
-- **VDD (logic):** Connect directly to Pandore `V3P3` rail (3.3V)
+- **VDD (logic):** Connect directly to Pandore `VSTBY` rail (≈3.3V always-on standby, from LDO U27 LDL212DR) — **not** `V3P3`; verified from the Rev A0 netlist (J25 pad 5 → VSTBY)
 - **VCC (OLED drive):** Connect directly to Pandore `V12` rail (12V) — within the 12.0–13.0V spec range, no boost converter needed
 - **Ground:** Connect to `VSS` (digital ground domain, not AVSS)
 - **IREF resistor:** R = (VCC − 3.5V) / 10 µA. For VCC = 12V: R ≈ 850 kΩ (nearest standard: 820 kΩ or 910 kΩ). Fine-tune for desired brightness.
@@ -646,7 +646,24 @@ Connected to the LattePanda Mu for system-level control.
 #### IREF and VCOMH
 
 - **IREF (pin 21):** R = (VCC − 3.5V) / 10 µA. For VCC = 12.5V (typ): R ≈ 900 kΩ → use **910 kΩ** (R196 in BOM, confirmed). For 12.0V: ~850 kΩ. Fine-tune for desired brightness.
-- **VCOMH (pin 22):** Bypass cap to VSS — use **2.2 µF** (not 4.7 µF)
+- **VCOMH (pin 22):** Bypass cap to VSS — **10 µF** (C230), verified from the Rev A0 netlist (earlier docs said 2.2 µF / 4.7 µF — both wrong)
+
+#### Verified from Rev A0 netlist (J25 pad → net, from `pandore.kicad_pcb`)
+
+Ground truth for the OLED socket, pulled from the PCB's per-pad net assignments (not inferred from the schematic). This settles a recurring misdiagnosis that the SSD1309 VCC is stuck at 3.3 V:
+
+- **Pin 23 (VCC, OLED drive) → `V12`.** The panel drive voltage is the board's 12 V input rail. There is **no boost converter, and none is needed** — Pandore is fed 12 V from the barrel jack (J6, PJ-063BH), and V12 is the *highest* rail; the AP63356 bucks (U19/U20) step it *down* to 5 V/3.3 V. (The only boost on the board is the 48 V phantom supply, LM5158 in `pandore-audio-power` — unrelated.) So "no boost anywhere" is true but irrelevant: a 12 V-fed board already has 12 V.
+- **Pin 5 (VDD, logic) → `VSTBY`** (≈3.3 V standby), a *different* net from VCC. VCC and VDD are not the same rail.
+- **VCC decoupling:** `C231` = **10 µF** / 25 V X5R (0805) ‖ `C228` = **100 nF** / 25 V X7R (0402), both V12→VSS, placed ~6 mm from J25. J25 is the **only** V12 consumer on the Mgmt MCU sheet, so these are unambiguously the panel's decoupling. Note `C230` (VCOMH) and `C231` (VCC bulk) are the *same* part number, GRM21BR61E106KA73K — easy to confuse when hand-populating.
+- **BS1/BS2 (pins 6/7):** strap-select. R194/R195 (0 Ω → VSS) **populated**; R192/R193 (10 kΩ → VSTBY) **DNP** → BS1 = BS2 = 0 → **4-wire SPI**.
+- **Signals:** CS# (8) → `SDISP.~{SS}`, RES# (9) → `SDISP.~{RST}`, **D/C# (10) → `SDISP.~{LATCH}`** (repurposed net name — the pin most likely to bite firmware if CS/DC are swapped), SCLK (13) → `SDISP.SCK`, SDIN (14) → `SDISP.MOSI`. R/W#, E/RD#, D3–D7 → VSS. IREF (21) → R196 = 910 kΩ → VSS. VCOMH (22) → C230 = 10 µF → VSS.
+
+**Blank-but-powered bring-up checklist** (12 V confirmed at pin 23, panel dark):
+1. **FFC seating** — top-contact 24-pin flex, latch fully closed, contacts facing the right way. By far the most common cause.
+2. **Firmware pin mapping** — scope CS/DC/SCK/MOSI *at the connector*; confirm D/C# (`SDISP.~{LATCH}`) and CS# (`SDISP.~{SS}`) aren't swapped in firmware.
+3. **12 V holds under load** (16–45 mA) and VCC local decoupling present.
+4. **Contrast (0x81) not left at 0**; VDD-before-VCC power-up order.
+5. **Continuity sanity:** BS1→VSS and BS2→VSS ≈ 0 Ω (confirms R194/R195, not R192/R193); IREF→VSS ≈ 910 kΩ.
 
 #### Sourcing Options
 
