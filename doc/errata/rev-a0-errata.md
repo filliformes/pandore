@@ -15,7 +15,9 @@ revision.
 **Subsystem:** Audio — codec control port
 **Severity:** Blocking. The CS4272 cannot be configured over I²C at all.
 **Affects:** Revision A0, all three boards.
-**Status:** Open. Software workaround available; no rework required.
+**Status:** Open, root cause **confirmed by the designer** (Laurence, 2026-09-02).
+Software workaround available for the Teensy; no rework required for it.
+**The host path is not equally recoverable** - see "Effect on the LattePanda Mu" below.
 
 ### Symptom
 
@@ -75,11 +77,39 @@ This matches the `reekilib` symbol's pin functions, so both the CS4272 and
 ISO1640 symbols are correct — the error is in the connections, not the
 library.
 
-> **Not yet measured on hardware.** This entry is derived from the netlist.
-> Before performing any rework, confirm on the bench: probe `EXP8` pins 1
-> and 2 while the Teensy runs an I²C scan. The pin carrying the clock
-> square wave should be the one routed to codec pin 12 if the transposition
-> is present.
+> **Confirmed by the board's designer.** Laurence Deschênes Villeneuve
+> confirmed on 2026-09-02 that the CS4272's SDA and SCL pins were
+> transposed in the Rev A0 design. This entry is therefore no longer a
+> netlist-derived hypothesis: the root cause is established.
+>
+> A bench check is still worth doing once before rework, to confirm the
+> board matches the design: probe `EXP8` pins 1 and 2 while the Teensy runs
+> an I²C scan. The pin carrying the clock square wave should be the one
+> routed to codec pin 12.
+
+### Effect on the LattePanda Mu (host) path
+
+`AUDMST` is shared: the Mu's `I2C2` (`U1.154` / `U1.156`) sits on the same
+segment as the Teensy, and both cross `U24` to reach the codec. So the
+transposition affects the host exactly as it affects the Teensy.
+
+The difference is what each can do about it:
+
+- **Teensy:** bit-bangs the bus, so it can simply swap the pin roles in
+  software (Workaround A). No rework.
+- **LattePanda Mu:** if it drives the codec through the **SerialIO I2C2
+  hardware controller**, the roles cannot be swapped. A hardware I²C master
+  will not work with SCL and SDA exchanged. The host would need either the
+  hardware bodge (Workaround B), or to drive those two pins as GPIO and
+  bit-bang (`i2c-gpio` on Linux), which depends on the pins being exposed
+  as GPIO rather than owned by the I2C2 controller.
+
+**Consequence for the BIOS request:** item 3.1.5 (release `I2C2` from its
+PD-controller reservation) is still worth asking for, and remains a
+one-shot opportunity, but on Rev A0 it will not by itself give the host a
+working codec link. Do not report a failed host-to-codec I²C test to
+LattePanda as a BIOS fault; it is this errata. See
+[../bios-customization-request.md](../bios-customization-request.md) §6.
 
 ### Workaround A — software, no rework (recommended)
 
