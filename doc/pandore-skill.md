@@ -148,6 +148,29 @@ pico_add_extra_outputs(pandore_oled)  # generates .uf2
 
 How Pandore software is actually built, where it lives, and the verified toolchain — as opposed to the aspirational advice elsewhere. Written from real bring-up (2026-05).
 
+### Host OS — Linux (CachyOS)
+
+The LattePanda Mu host runs **Linux, specifically CachyOS** (Arch-based,
+performance-tuned). Confirmed 2026-09-18. The eMMC Mu ships with Win11
+preinstalled; it is wiped. This matches the production plan (one C++20 daemon,
+audio via JACK/PipeWire).
+
+**The Windows Pico-SDK toolchain saga documented below is a *dev-PC* artifact,
+not the Mu target.** On Arch the RP2350 build is trivial: `arm-none-eabi-gcc` +
+newlib + cmake + ninja, with `picotool` from the AUR.
+
+Arch/CachyOS gotchas that differ from Debian/Ubuntu:
+
+- **Serial group is `uucp`, not `dialout`** — for `/dev/ttyACM*` (RP2350 CDC and
+  Teensy).
+- **Python is PEP-668 externally-managed** — use `pipx`/venv or the
+  `python-pyserial` pacman package for `host_bridge`; bare `pip install` fails.
+- **Realtime audio:** add the user to `audio` + `realtime`, set
+  `@audio - rtprio 95` and `memlock unlimited`. CachyOS's default BORE kernel is
+  already low-latency.
+- **udev rules** needed for flashing: `99-picotool.rules` and PJRC's
+  `00-teensy.rules`.
+
 ### Firmware repo
 
 The firmware does **not** live in this `pandore` hardware repo (that's KiCad + CERN-OHL-S). It lives in a **separate firmware repo**, MIT-licensed, laid out as:
@@ -225,7 +248,7 @@ GPIO/PWM assignments needed to write code against the expansion headers (traced 
 
 1. **Teensy 4.1** — Arduino/PlatformIO, Teensy Audio Library: I2S ↔ USB Audio, USB MIDI, CS4272 I²C control.
 2. **RP2350B RTIO MCU** — Pico SDK: real-time I/O, ADC, 8× PWM, sensors.
-3. **RP2350 Management MCU** — Pico SDK: OLED menu, encoder, RGB, power sequencing, fan, IMU. ← the `mgmtmcu_menu` prototype targets this.
+3. **RP2350 Management MCU** — Pico SDK: OLED menu, encoder, RGB, power sequencing, IMU. (**Not** fans — see Thermal.) ← the `mgmtmcu_menu` prototype targets this.
 4. **LattePanda Mu** — x86-64 Linux/Windows: main app host, DSP (JACK/PipeWire/ASIO), and the production daemon.
 
 ---
@@ -253,7 +276,7 @@ GPIO/PWM assignments needed to write code against the expansion headers (traced 
     │ Audio/MIDI │   │ RTIO MCU│  │    │ (RP2350)        │
     │ Bridge     │   │         │  │    │                 │
     │            │   │ 48 GPIO │  │    │ BMI270 IMU      │
-    │ I2S ↔ USB  │   │ UART×2  │  │    │ Fan PWM ×2      │
+    │ I2S ↔ USB  │   │ UART×2  │  │    │ (fans: see CPU) │
     │ MIDI ↔ USB │   │ SPI×2   │  │    │ Power Seq       │
     │            │   │ I2C     │  │    │ Boot/Reset      │
     │ CS4272     │   │ USB     │  │    │ Display Ctl     │
@@ -551,6 +574,37 @@ When the Teensy is socketed onto its TSW header stack, the pogo pins make spring
 | `USBD.VUSB` | USB device power | USB device bus voltage |
 | `USB{USB2}` | LattePanda Mu | USB 2.0 connection to host CPU |
 
+#### USB path to the host — and the power gate that bites
+
+The Teensy reaches the Mu on **`USB2_P6` (edge pins 112/114)** via the `J28`/`J29`
+pogo pins and series jumpers **`JMP6`/`JMP7`**.
+
+> **The confound that makes a pogo-path test meaningless if skipped.** The
+> Teensy's `VIN` is **unconnected**. On the pogo path its *only* supply is
+> `USBD.VUSB` (pad 59) ← **`U33`** (ET20162 load switch) ← `V5`, whose **enable is
+> `AUDIO.EN` = Mu `GPP_F12`**. If the host never drives `GPP_F12` high, `U33`
+> stays off, the Teensy is unpowered, and it will not enumerate **on any BIOS**.
+> With a USB-C cable it is powered by that port's VBUS instead — which is why
+> cabling "works" and the pogo path appears dead.
+>
+> Any pogo-path test must: (1) fit `JMP6`/`JMP7`, (2) drive `GPP_F12` high,
+> (3) measure 5 V on Teensy pad 59. Only then does a negative result implicate
+> the BIOS. **The pin-13 LED is not a power indicator.**
+>
+> **The production daemon must assert `GPP_F12` as part of power sequencing, or
+> there is no audio interface at all.**
+
+Also: stock Mu BIOS declares `USB2_P6` "dedicated for USB Type-C ... cannot be
+used as a standard USB port". LattePanda's own design guide confirms this is
+**firmware policy, not silicon**. Bench-confirmed 2026-09-13: with `JMP6`/`JMP7`
+fitted and 5 V present, the Teensy does **not** enumerate over the pogo path on
+stock BIOS, but **does** when cabled from its own USB-C to a Pandore USB-A port.
+Device and firmware are fine; the port is the difference.
+
+Leave the Teensy's underside `VUSB`↔`VIN` pads **intact** — the common "cut for
+external power" mod kills the pogo path. No spare USB2 lane exists as a
+fallback; all 8 are allocated.
+
 **Firmware responsibilities:**
 1. Class-compliant USB Audio device (I2S ↔ USB bridge)
 2. MIDI data transfer (DIN → USB MIDI → LattePanda Mu) — **only when
@@ -605,7 +659,6 @@ Connected to the LattePanda Mu for system-level control.
 ### Responsibilities
 
 - Power-on sequencing
-- Fan control (dual PWM)
 - Boot/reset control
 - Display management
 - RGBA LED output
@@ -617,14 +670,17 @@ Connected to the LattePanda Mu for system-level control.
 - **Interface:** I2C or SPI (connected to management MCU)
 - **Use case:** Motion-based instrument control (tilt, shake, orientation)
 
-### Fan Control
+### Fan Control — *not* owned by this MCU
 
-| Fan Header | Signals | Description |
-|------------|---------|-------------|
-| `FANCPU{TAC PWM}` | `FANCPU.TAC`, `FANCPU.PWM` | CPU fan (tachometer + PWM) |
-| `SYSCPU{TAC PWM}` | `SYSCPU.TAC`, `SYSCPU.PWM` | System fan (tachometer + PWM) |
-
-4-pin headers: VCC, GND, TAC (RPM feedback), PWM (speed control).
+> **Correction (verified 2026-09 from the netlist).** The fans are driven by the
+> **LattePanda Mu**, not the Management MCU. `FANCPU{TAC PWM}` and
+> `SYSCPU{TAC PWM}` terminate in `pandore-cpumod.kicad_sch` on the Mu's native
+> `FAN_CTL`/`FAN_TAC` edge pins. The strings `FANCPU`/`SYSCPU` appear **zero**
+> times in `pandore-mgmtmcu.kicad_sch`. Confirmed independently by Laurence.
+>
+> Consequence: fan speed is handled by the Mu's BIOS/OS thermal management
+> (ACPI / `hwmon` on Linux). **No MCU firmware is needed, or able, to control
+> them.** See [Thermal](#thermal).
 
 ### OLED Status Display
 
@@ -1033,6 +1089,25 @@ Connectors and footprints are on the PCB; the parts themselves must be hand-sold
 
 > ⚠️ **560Ω series resistors constrain I2C pull-up sizing.** R197's 560Ω sits between MCU and connector. When the bus is pulled low, the MCU pin sees `560 × I_pullup` above ground; RP2350 V_IL ≈ 0.99V, so total parallel pull-up must stay **above ~2.4 kΩ**. A single SparkFun Qwiic board (2.2 kΩ pull-ups) is at the edge; two chained will break it. Adafruit STEMMA QT (10 kΩ) is safe. Remedy: cut pull-up jumpers on chained boards, or drop R197 to ~100Ω in rev A1. **Measure on the bench before committing.**
 
+#### Sensor ecosystem — standardize on Qwiic / STEMMA QT
+
+**Decision (2026-09): Qwiic / STEMMA QT / Arduino Modulino. Not M5Stack.**
+The ports exist to give the average user an easy plug-in sensor solution, and the
+3.3 V-only wiring above decides which ecosystem that can be.
+
+| Ecosystem | Verdict |
+|---|---|
+| **Qwiic / STEMMA QT** | ✅ 3.3 V *by definition* — no level shifter, no rail change, no hazard. 400+ boards. Works on Rev A0 today via a Grove→Qwiic adapter cable (Adafruit #4528 / SparkFun PRT-15109 — I²C-only, which matches Pandore's Grove wiring exactly). |
+| **Seeed Grove** | ⚠️ 5 V by default; only a ~60-module 3.3 V subset. Beware "3.3V/5V" on a datasheet — that is a *rated range*, and logic follows VCC. There is no jumper. |
+| **M5Stack Units** | ❌ Need 5 V (onboard LDO per unit). Incompatible with a 3.3 V port. Only worth revisiting if the cased-unit aesthetic ever outweighs the 400-board catalogue — and that needs a 5 V-switchable port plus a PCA9306/TXS0102 translator per port. |
+
+**Rev A0 bench plan:** order Grove→Qwiic cables plus a few Adafruit STEMMA QT /
+Arduino Modulino modules; validate both the I²C path *and* the pull-up budget above.
+
+**Rev A1 wishlist:** drop `R197` to ~100 Ω, and move Grove V+ off `VSTBY` onto a
+**switched** 3.3 V rail — reuse the ET20162 load-switch pattern already used on every
+USB VBUS. A chain of 8–10 sensors at 5–10 mA each lands right on the 100 mA PTC limit.
+
 ### Sensor ecosystem — use Qwiic / STEMMA QT (NOT M5Stack)
 
 The Grove ports exist to give the average user an easy plug-in sensor solution. **Ecosystem research (2026-09) settled on Qwiic / STEMMA QT / Arduino Modulino, because they are 3.3V-native and match the port Pandore already has.**
@@ -1193,7 +1268,9 @@ Power sequencing uses MOSFETs Q11, Q12, Q14, Q15 (MOSFET_EN-N).
   - FIT0981 — Active cooler (fan + heatsink), **5V fan** — **ships with PC-fan plug; cut & re-terminate with 22-01-3047 to mate Pandore's KK 254**
   - FIT0982 — Thin passive heatsink
   - FIT0989 — Fanless heatsink
-- **Fan control:** PWM via Management MCU
+- **Fan control:** driven by the **LattePanda Mu's native `FAN_CTL`/`FAN_TAC` pins** (`pandore-cpumod.kicad_sch`), i.e. BIOS/OS thermal management — *not* the Management MCU. Verified from the netlist 2026-09 and confirmed by Laurence.
+- **Fan rail is +5 V, not +12 V.** The `VDD` net on `pandore-fan.kicad_sch` resolves to `V5`, matching DFRobot's Lite Carrier (`+5V_FAN`). A 12 V PC fan will spin at ~30 % and will not be damaged, but do not bodge 12 V onto pin 2.
+- **Cable pinout (Intel 4-wire):** 1 = GND (black), 2 = +5 V, 3 = TACH, 4 = PWM. TACH inputs are **5 V tolerant only**; the Mu has internal pull-ups, so no external resistors are needed.
 
 ---
 
