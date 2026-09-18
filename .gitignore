@@ -16,3 +16,7 @@
 *kicad_output/
 *.history/
 *.history_trim/
+
+# Vendor / BIOS negotiation documents live in the private software repo
+# (677_pandore), not in this public hardware repo. See doc/errata ERR-001.
+doc/bios-customization-request.*
