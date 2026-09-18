@@ -1023,7 +1023,7 @@ Reference: [doc/test/bringup/pandore_a0_bringup.md](doc/test/bringup/pandore_a0_
 | Item | Part / Notes |
 |---|---|
 | RTC battery | CR2032 (any source, Amazon CA easy) |
-| Manual jumpers (15 total: JMP1–JMP15) | Standard 2.54 mm jumper shunts. JMP15 is special: `PON` power-on jumper. Some need elongated shunts. |
+| Manual jumpers (15 total: JMP1–JMP15) | Standard 2.54 mm jumper shunts. Two are easy to confuse: **JMP12 `AUTOON`** is the hardware auto-power-on (short it for boot-on-power); **JMP15 `PON`** is a 3-pin power-state select (S3/S0), not auto-power-on. Some need elongated shunts. |
 | Encoder (E1) | Bourns PEL12T-4225T-S1024 — manually assembled (cost + sourcing) |
 | Audio connectors | J4, J5 (XLR combo), J12 (TRS line out) — hand-soldered |
 | Ethernet connectors | J8, J9 (RJE58-188-5441) — hand-soldered |
@@ -1098,7 +1098,8 @@ Reference: [doc/test/bringup/pandore_a0_bringup.md](doc/test/bringup/pandore_a0_
 | `RSTSW` | Reset switch → Management MCU |
 | `PWRSW` | Power switch → Management MCU |
 | `STATE0`, `STATE3` | System state monitoring |
-| `PON` (JMP15) | Power-on jumper |
+| `AUTOON` (JMP12) | **Hardware auto-power-on** (2-pin): pad 1 → Q12 drain, pad 2 → `PWRSW`. Shorted = Q12 pulses `PWR_BTN#` on power-up, the mechanism LattePanda's design guide recommends over the BIOS "Restore AC Power Loss" setting |
+| `PON` (JMP15) | **Power-state select** (3-pin): `MGMTMON.S3` / `MGMTMON.PWR` / `MGMTMON.S0`. Ties the Mgmt-MCU power monitor line to S3 or S0. **Not** the auto-power-on jumper |
 | `B1`, `B2` | Momentary tactical switches (reset/power) |
 
 Power sequencing uses MOSFETs Q11, Q12, Q14, Q15 (MOSFET_EN-N).
