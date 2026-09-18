@@ -553,7 +553,10 @@ When the Teensy is socketed onto its TSW header stack, the pogo pins make spring
 
 **Firmware responsibilities:**
 1. Class-compliant USB Audio device (I2S ↔ USB bridge)
-2. MIDI data transfer (MIDI DIN → USB MIDI → LattePanda Mu)
+2. MIDI data transfer (DIN → USB MIDI → LattePanda Mu) — **only when
+   `JMP1`/`JMP2` are set to the Teensy (1–2)**; the DIN ports are
+   jumper-shared with the Mu's UART2. Teensy side is `Serial8`
+   (IO34 RX / IO35 TX). See [MIDI Interface](#midi-interface).
 3. Codec I2C control (configuration, sample rate, gain)
 
 ---
@@ -822,21 +825,92 @@ For firmware development before Pandore PCB arrives:
 
 ## MIDI Interface
 
+The DIN ports are a **hardware UART**, jumper-routed to *either* the Teensy 4.1
+*or* the LattePanda Mu — not both at once. This is independent of USB-MIDI:
+`usbMIDI` and the DIN UART are separate transports, and any DIN↔USB merge has
+to be done in firmware.
+
 ### Circuit
 
 ```
-MIDI IN (5-pin DIN, SDS-50J)
-    │
-    └→ H11L1 Optoisolator → MIDI.RX → Teensy UART → USB MIDI → LattePanda Mu
-                                                                       │
-LattePanda Mu → USB MIDI → Teensy UART → MIDI.TX → MIDI OUT (5-pin DIN, SDS-50J)
+                              JMP1 "MIDIRX"            ┌─ pin 1 ─ Teensy IO34 (Serial8 RX)
+MIDI IN  (J10, SDS-50J)           (select)             │
+  pin 4 ─ R51 220R ─┐                                  │
+                    ├─ H11L1 (U10) ─ MIDI.RX ─ pin 2 ──┤
+  pin 5 ─ D17 ──────┘   opto, V3P3                     │
+                                                       └─ pin 3 ─ LattePanda UART2_RXD (U1.140)
+
+                              JMP2 "MIDITX"            ┌─ pin 1 ─ Teensy IO35 (Serial8 TX)
+MIDI OUT (J11, SDS-50J)           (select)             │
+  pin 5 ─ R52 10R ─┐                                   │
+                   ├─ 74LVC1G17 (U28) ─ MIDI.TX ─ pin 2┤
+  pin 4 ─ R53 33R ─┘   buffer, V3P3                    │
+                                                       └─ pin 3 ─ LattePanda UART2_TXD (U1.138)
 ```
 
-- **Connectors:** 2× SDS-50J (Same Sky 5-pin DIN)
-- **Isolation:** H11L1 optoisolator with Schmitt-trigger output on MIDI IN
-- **Signals:** `MIDI.TX`, `MIDI.RX`, `MIDIRX`, `MIDITX`
-- **Power:** `VMIDI` supply rail
-- **UART:** Connected via `UART` hierarchical label
+### Verified from Rev A0 netlist
+
+**Routing jumpers — pin 2 is the common on both.** `JMP1` (`MIDIRX`) and
+`JMP2` (`MIDITX`) are 3-pin `PH1-03-UA` headers, both populated:
+
+| | pin 1 | pin 2 (common) | pin 3 |
+|---|---|---|---|
+| **JMP1** `MIDIRX` | `/Audio/MIDI.RX` → **Teensy `U9.26` = IO34** | `/MIDI/MIDI.RX` → `U10.4` opto output | `/Computer/AUDIO.MIDI.RX` → **Mu `U1.140` UART2_RXD** |
+| **JMP2** `MIDITX` | `/Audio/MIDI.TX` → **Teensy `U9.27` = IO35** | `/MIDI/MIDI.TX` → `U28.2` buffer input | `/Computer/AUDIO.MIDI.TX` → **Mu `U1.138` UART2_TXD** |
+
+- Shunt **1–2** on both → DIN MIDI serves the **Teensy**.
+- Shunt **2–3** on both → DIN MIDI serves the **LattePanda Mu**.
+- Mixing them (one jumper each way) gives the confusing half-working case:
+  MIDI IN to one processor, MIDI OUT from the other.
+
+**Teensy pins: `Serial8`.** `IO34` = RX, `IO35` = TX (symbol alternates
+`UART8.RX` / `UART8.TX`). In Teensyduino: `Serial8.begin(31250)`, or
+`MIDI_CREATE_INSTANCE(HardwareSerial, Serial8, MIDI)`.
+
+**LattePanda pins:** `UART2` — `U1.140` RXD / `U1.138` TXD.
+
+**MIDI IN (`J10`)** — opto-isolated per the MIDI spec:
+DIN pin 4 → `R51` 220 Ω → `U10` (H11L1) LED anode; DIN pin 5 → `D17`
+(reverse protection) → LED cathode. `U10` has a **push-pull Schmitt output**
+on `V3P3`/`VSS`, so `MIDI.RX` is already clean logic — no external pull-up
+needed and polarity is handled. Shield/GND via `R54` 0 Ω and `C85`/`C86`
+100 pF.
+
+**MIDI OUT (`J11`)** — buffered, 3.3 V current-limiting:
+`MIDI.TX` → `U28` (74LVC1G17 Schmitt buffer, `V3P3`) → `R52` **10 Ω** →
+DIN pin 5; `R53` **33 Ω** → DIN pin 4. These are the **3.3 V-scaled** MIDI
+OUT values, *not* the classic 220 Ω / 220 Ω pair used on 5 V designs — do not
+"correct" them to 220 Ω.
+
+> **`R245` is a 0 Ω DNP bypass across `U28` (input `A` ↔ output `Y`), and DNP
+> is the correct state.** It exists so the buffer can be bypassed if `U28` is
+> depopulated. With `U28` fitted (as it is on Rev A0), `R245` must stay
+> unpopulated — fitting it would short the buffer's input to its output.
+
+**Domain:** MIDI lives in the **digital** domain (`V3P3` / `VSS`), *not* the
+isolated audio domain. The opto on MIDI IN provides the MIDI-spec isolation
+from the external cable, which is a separate concern from the `AVSS` audio
+isolation barrier.
+
+- **Connectors:** `J10` = MIDI **IN**, `J11` = MIDI **OUT**, both Same Sky
+  SDS-50J 5-pin DIN (hand-soldered, DNP in the PCBA order)
+- **Signals:** `MIDI.TX`, `MIDI.RX` (codec/DIN side), `AUDIO.MIDI.TX`,
+  `AUDIO.MIDI.RX` (host side)
+
+### Bring-up
+
+1. Set `JMP1` and `JMP2` **both** to 1–2 for the Teensy.
+2. Echo raw DIN bytes to the host to prove the path before writing parser code:
+
+```cpp
+void setup() { Serial8.begin(31250); }
+void loop() {
+  while (Serial8.available())
+    usbMIDI.sendControlChange(9, Serial8.read() & 0x7F, 16);
+}
+```
+
+If nothing arrives, check `JMP1` is on 1–2 before suspecting firmware.
 
 ---
 
