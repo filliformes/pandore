@@ -108,8 +108,8 @@ The difference is what each can do about it:
 PD-controller reservation) is still worth asking for, and remains a
 one-shot opportunity, but on Rev A0 it will not by itself give the host a
 working codec link. Do not report a failed host-to-codec I²C test to
-LattePanda as a BIOS fault; it is this errata. See
-[../bios-customization-request.md](../bios-customization-request.md) §6.
+LattePanda as a BIOS fault; it is this errata. (The BIOS customization
+request itself lives in the private software repo, not here.)
 
 ### Workaround A — software, no rework (recommended)
 
