@@ -244,9 +244,29 @@ which are **correct** (MUTEC is active-low per datasheet §5.5/§8.5.1). Note th
 
 ### Workaround — none in software
 
-The SAI peripheral's signals are fixed to specific pads, so the Teensy cannot be
-told to take its bit clock or data from the pins the board actually delivers
-them on.
+Not because remapping is impossible in general. The IMXRT does provide
+daisy-chain `SELECT_INPUT` registers for `SAI1_RX_BCLK`, `RX_SYNC` and
+`RX_DATA0`–`3`, and SAI1's data lines can be assigned to several pads. The
+problem is that none of the reachable pads are the ones this board uses. On
+Teensy 4 (`__IMXRT1062__`), from the Audio library's own multi-channel objects:
+
+| SAI1 signal      | pads it can use | this board delivers it on        |   |
+|------------------|-----------------|----------------------------------|---|
+| TX_DATA          | 6, 7, 9, 32     | codec `SDIN` driven from **IO23**  | ✗ |
+| RX_DATA          | 6, 8, 9, 32     | codec `SDOUT` arrives on **IO7**   | ✗ |
+| RX_BCLK          | 21 only         | codec `SCLK` arrives on **IO8**    | ✗ |
+| RX_SYNC (LRCK)   | 20 only         | codec `LRCK` arrives on IO20     | ✓ |
+
+The hardest blocker is playback data: the codec's `SDIN` is fed from **IO23**,
+which is SAI1's **MCLK** pad and carries no TX_DATA function at all, so audio
+data cannot leave the chip on that pin by any SAI configuration. `SAI2` is no
+alternative either — it is on pins 2/3/4/5/33, none of which this board uses.
+
+The one theoretical escape is **FlexIO** (`IO23` = `AD_B1_09` has a FlexIO2
+alternate): a FlexIO shift register clocked from the external BCLK/LRCK could in
+principle emit the data, with the same required on the receive side. That means
+writing a FlexIO-based I²S engine rather than remapping the SAI, and the Teensy
+Audio library offers no such path — far more effort than lifting two 0 Ω arrays.
 
 ### Hardware bodge
 
