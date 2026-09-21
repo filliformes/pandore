@@ -286,6 +286,28 @@ Teensy IO22 (~RST)     -> U23 INF       (already correct — keep)
 This is preferable to cutting traces or lifting the codec's 0.65 mm pins: the
 array pads are larger and every wrong net is removed in one step.
 
+The Teensy IO numbers above were checked against the `U9` symbol rather than
+assumed. The symbol numbers its pins in physical pad order and names most of
+them `IOxx`, so the audio pins — which are named by function instead — are
+pinned down by their explicitly numbered neighbours:
+
+```
+pin  8 = IO6           <- anchor        pin 39 = IO17          <- anchor
+pin  9 = AUDIO.O1A     => IO7           pin 40 = I2C0.SDA      => IO18
+pin 10 = AUDIO.IN1     => IO8           pin 41 = I2C0.SCL      => IO19
+pin 11 = IO9           <- anchor        pin 42 = AUDIO.LRC1    => IO20
+                                        pin 43 = AUDIO.BCL1    => IO21
+                                        pin 44 = IO22          <- anchor
+                                        pin 45 = AUDIO.MCL1    => IO23
+                                        pin 46 = 3.3V          <- run ends
+```
+
+`IO22` at pin 44 falls *inside* the second run, so that sequence is anchored
+from both directions. The same argument gives `UART8.RX`/`TX` at pins 26/27 as
+`IO34`/`IO35` (between `IO33` at 25 and `IO36` at 28), which is the DIN MIDI
+pair. This is also consistent with the `i2s_pinprobe` measurements, which landed
+on exactly the pins this mapping predicts.
+
 ### Fix for Rev B
 
 Re-map the isolator connections against the **YC124 1↔8 / 2↔7 / 3↔6 / 4↔5**
