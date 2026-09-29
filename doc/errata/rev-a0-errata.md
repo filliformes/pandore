@@ -8,6 +8,8 @@ revision.
 |----|-----------|----------|--------|
 | [ERR-001](#err-001--cs4272-i²c-sdascl-crossed-between-isolator-and-codec) | Audio / codec control | **Blocking** — codec unreachable over I²C | Open, software workaround available |
 | [ERR-002](#err-002--teensycodec-i²s-signals-rotated-across-the-isolator) | Audio / I²S data path | **Blocking** — no audio in either direction | Open, hardware rework required |
+| [ERR-003](#err-003--rj45-jacks-split-the-two-middle-ethernet-pairs) | Ethernet / both ports | **Degraded** — links fall back to 100 Mbit/s | Open, adapter patch cord restores gigabit |
+| [ERR-004](#err-004--ethernet-controllers-have-no-mac-address) | Ethernet / both ports | **Minor** — random MAC address at every boot | Open, software workaround in place |
 
 ---
 
@@ -319,3 +321,153 @@ catch this. The check has to verify, per net, that the *pin function* at each en
 matches **and** that signal direction is consistent with the isolator channel
 direction — here an output (`IO7`) was connected to a channel output, which an
 ERC configured for pin-type conflicts across the array would have flagged.
+
+---
+
+## ERR-003 — RJ45 jacks split the two middle Ethernet pairs
+
+**Subsystem:** Ethernet — both ports (`J8` "Internal Ethernet", `J9` "External Ethernet")
+**Severity:** Degraded. Both ports work, but gigabit links fall back to 100 Mbit/s.
+**Affects:** Revision A0. Observed on two boards (`pandore16`, `flou`).
+**Status:** Open, root cause **confirmed on the bench** (2026-09-29): an adapter
+patch cord that follows the board's pairing brings the link up at 1 Gbit/s.
+
+### Symptom
+
+Every link negotiates 100 Mbit/s, never 1000, whatever the other end. Against a
+gigabit switch, Linux logs a downshift:
+
+```
+Generic FE-GE Realtek PHY r8169-0-200:00: Downshift occurred from negotiated speed 1Gbps to actual speed 100Mbps, check cabling!
+r8169 0000:02:00.0 enp2s0: Link is Up - 100Mbps/Full (downshifted) - flow control rx/tx
+```
+
+### Root cause
+
+The jack contacts are wired to the four signal pairs in numeric order. A cable
+twists contacts **1-2, 3-6, 4-5 and 7-8** together (TIA-568), so the two middle
+pairs each run over wires from two different twisted pairs:
+
+| Signal pair | Jack pads (J8 and J9) | Twisted pair in the cable | |
+|---|---|---|---|
+| `PAIR0` (MDI0) | 1-2 | 1-2 | correct |
+| `PAIR1` (MDI1) | **3-4** | 3-6 | split |
+| `PAIR2` (MDI2) | **5-6** | 4-5 | split |
+| `PAIR3` (MDI3) | 7-8 | 7-8 | correct |
+
+100BASE-TX uses only contacts 1-2 and 3-6, and a split pair still gets through
+on a short cable. 1000BASE-T drives all four pairs at once and fails; the PHY
+retries, then downshifts to 100 Mbit/s.
+
+Everything upstream of the jacks is correct: each port is an `RTL8111H`
+(`pandore-eth` sheet) with a four-channel pulse transformer and all four pairs
+routed (`MDI0`–`MDI3` → `PAIR0`–`PAIR3`). Only the last hop, pairs to jack
+contacts, is out of order.
+
+### Evidence
+
+- **PCB netlist**, per-pad net assignments in `hw/pandore.kicad_pcb`, footprint
+  `amphenol_RJE58-188-54x1-0x`, identical on both jacks:
+
+  ```
+  J8 (Internal Ethernet)  1:PAIR0+  2:PAIR0-  3:PAIR1+  4:PAIR1-  5:PAIR2+  6:PAIR2-  7:PAIR3+  8:PAIR3-
+  J9 (External Ethernet)  1:PAIR0+  2:PAIR0-  3:PAIR1+  4:PAIR1-  5:PAIR2+  6:PAIR2-  7:PAIR3+  8:PAIR3-
+  ```
+
+- **PHY registers**, read on a running board: the PHY is gigabit capable
+  (`ESTATUS` = `0x2000`, 1000BASE-T full duplex) and the uplink switch
+  advertises gigabit (`GBSR` bit 11 set), but after the downshift the PHY no
+  longer advertises it (`GBCR` = `0x0000`), while Linux still believes it does
+  (`ethtool`: advertised `1000baseT/Full`). A mismatch between what the kernel
+  advertises and what the PHY sends is the signature of an automatic downshift.
+- **Bench test.** An adapter patch cord crimped in the board's order at one end
+  (one twisted pair on each of 1-2, 3-4, 5-6, 7-8) and T568B at the other:
+
+  ```
+  r8169 0000:01:00.0 enp1s0: Link is Up - 1Gbps/Full - flow control rx/tx
+  ```
+
+  No downshift is logged. The same port and cable run at 100 Mbit/s with a
+  standard cable. This also confirms that the footprint's pad numbers are the
+  jack's contact numbers.
+
+### Workaround — adapter patch cord
+
+Board end crimped in the board's order, other end standard T568B. Only pins 4,
+5 and 6 differ from a T568B cable. Plug viewed with the clip underneath and the
+contacts facing you, pin 1 on the left:
+
+| Pin | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| **Pandore end** | white/orange | orange | white/green | **green** | **blue** | **white/blue** | white/brown | brown |
+| Other end (T568B) | white/orange | orange | white/green | blue | white/blue | green | white/brown | brown |
+
+Between two Rev A0 boards, crimp **both** ends in the Pandore order. Label these
+cords "Rev A0 only": between two ordinary devices they split pairs themselves and
+still link at 100 Mbit/s, which hides the mistake.
+
+### Fix for Rev B
+
+On both jacks, `PAIR1` must land on contacts 3 and **6**, and `PAIR2` on **4**
+and 5:
+
+| Pad | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|
+| Rev A0 | `PAIR1+` | `PAIR1-` | `PAIR2+` | `PAIR2-` |
+| **Rev B** | `PAIR1+` | **`PAIR2+`** | **`PAIR2-`** | **`PAIR1-`** |
+
+Polarity within a pair is corrected automatically by the PHY, but keeping it
+straight costs nothing. As with ERR-001 and ERR-002 the net names read
+plausibly; the check that catches this compares each jack contact against the
+TIA-568 pairing, not against the net names.
+
+---
+
+## ERR-004 — Ethernet controllers have no MAC address
+
+**Subsystem:** Ethernet — both `RTL8111H` controllers
+**Severity:** Minor. Networking works, but the host has no stable identity on
+the network.
+**Affects:** Revision A0. Observed on two boards (`pandore16`, `flou`).
+**Status:** Open. Software workaround in place (677_pandore ADR-013).
+
+### Symptom
+
+Each boot, both interfaces come up with a new, locally administered MAC
+address, so a DHCP server hands the host a different IP address after a
+reboot:
+
+```
+r8169 0000:01:00.0: can't read MAC address, setting random one
+r8169 0000:02:00.0: can't read MAC address, setting random one
+r8169 0000:01:00.0 eth0: RTL8168h/8111h, e2:d2:10:a8:f7:9d, XID 541, IRQ 135
+```
+
+### Root cause
+
+The `pandore-eth` sheet has no configuration EEPROM, so each `RTL8111H` must
+hold its MAC address in its internal eFuse, and on these boards it was never
+programmed. The PCI subsystem ID also reads as Realtek's generic default, which
+fits a controller that was never configured for this board.
+
+### Evidence
+
+- Kernel log, every boot, both controllers (above); the MAC changes from one
+  boot to the next.
+- `pandore-eth` sheet: `RTL8111H`, crystal, magnetics and passives only, no
+  `93C46`/`93C56` EEPROM.
+
+### Workaround
+
+Software only. The OS gives the host a stable address derived from the machine
+ID: 677_pandore's `pandore-setup` bridges the two ports (`br0`) with
+NetworkManager's `cloned-mac-address=stable`. Without the bridge, the same
+setting on each Ethernet connection does it. Existing boards could also have
+their eFuse programmed with Realtek's programming utility, which needs a MAC
+address allocated for each port.
+
+### Fix for Rev B
+
+Either program each controller's eFuse at production with an allocated MAC
+address (two per board), or add a `93C46` EEPROM per controller and program
+those.
