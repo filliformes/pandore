@@ -478,7 +478,8 @@ those.
 ## ERR-005 — Line output jacks have tip and sleeve swapped
 
 > **Draft, for review by Laurence.** The root cause comes from the design files and
-> listening tests. It has not been confirmed by a continuity measurement.
+> listening tests. It has not been confirmed by a continuity measurement, and a
+> loopback test was inconclusive (see Evidence).
 
 **Subsystem:** Audio — line outputs (`J12`, Neutrik `NSJ12HF-1`)
 **Severity:** Degraded. The line outputs do not work with normal TS or TRS cables.
@@ -508,11 +509,12 @@ The line inputs show the expected assignment:
 | Ring | `RB` = `OUTL.SIG-` | `RT` = `OUTR.SIG-` | `R` = `LINE.SIG-` |
 | Sleeve | `SB` = **`OUTL.SIG+`** | `ST` = **`OUTR.SIG+`** | `S` = `AVSS` |
 
-This explains both symptoms:
+This would explain both symptoms, although the loopback test below shows one result
+it does not explain:
 
 - **TS plug, fully inserted:** the plug's sleeve bridges the ring and sleeve
-  contacts, which shorts `SIG+` to `SIG-` through the 100 Ω output resistors
-  (`R80`, `R81`) and leaves almost no signal. The 100 µF output capacitors
+  contacts, which shorts `SIG+` to `SIG-` through the 100 Ω output resistors and
+  leaves almost no signal. The 100 µF output capacitors
   (`C122`, `C127`, `C137`, `C138`) block DC, so this should not be harmful.
 - **TS plug, partly inserted:** the plug's tip sits on the ring contact (`SIG-`)
   and its body on the sleeve contact (`SIG+`), so signal gets through.
@@ -527,11 +529,63 @@ This explains both symptoms:
 - Neutrik drawing `ST-NSJ12HF-1`: `TT`, `RT` and `ST` are 20.48, 14.13 and 7.78 mm
   from the panel, so `T` is the contact deepest in the jack, which is the tip. The
   footprint matches, so the pad names are not a labelling mix-up.
+- Fabrication files (`release/pandore_2026-03-19_A0_pcba.zip`): `pandore.net` and
+  the pad attributes in `pandore-F_Cu.gbr` show the same assignment, so the fault is
+  in the design as sent to fabrication. The `J12` pad nets are also the same at
+  commits `ab4aa89` and `4497a3b`.
+- Copper trace: `SB` and `ST` reach `C122` and `C137`, and `EXP5.3` and `EXP6.3`,
+  through tracks.
 - Listening tests on `pandore16`, above, on both jacks.
 
-**Still to do:** with the power off, check that a plug's tip reads as connected to
-`AVSS`. A check of the ring and sleeve contacts against `EXP5` and `EXP6` would
-complete it.
+### Loopback test — inconclusive
+
+Done on `pandore16` on 2026-11-06, with the 48 kHz stopgap firmware (free-running
+clocks, audible bitcrushing). A TS cable ran from the bottom `J12` jack to `J4`,
+fully inserted at `J4`. The host played a sine at −20 dBFS, 1 kHz on the left and
+440 Hz on the right, with the sink volume at 0.50. The input was recorded and the
+level of each tone was measured.
+
+| Plug at `J12` | 1 kHz at `J4` | Total level (RMS) | Fits this erratum? |
+|---|---|---|---|
+| No cable, nothing playing | −129 dBFS | −77 dBFS | Baseline |
+| Fully in, first run | −121 dBFS (silent) | −76 dBFS | Yes |
+| Fully in, controlled run, 10 s | −110 to −137 dBFS (silent) | −75 dBFS | Yes |
+| Fully in, start of a timed sweep, 11 s | **−68.1 dBFS (tone)** | −61 dBFS | **No** |
+| About halfway out, held, 10 s | −114 to −124 dBFS (silent) | −75 dBFS | No |
+| Timed sweep, pulled out about 4 mm every 5 s, 12–42 s | Switches between −68.1 dBFS and silent, ending on tone | −61 to −65 dBFS | No clear pattern |
+
+What the test does show:
+
+- **The line input works:** holding the tip of a plug in `J4` raised `J4` from
+  −75 to −49 dBFS RMS, while `J5` did not change.
+- **The tone came through the cable:** `J5`, which had no cable, stayed at its noise
+  floor throughout, with 440 Hz at about −113 to −129 dBFS. This makes a digital leak
+  inside the board unlikely. A run with no cable at all has not been done.
+- **The bottom jack carries the left channel:** `J4` received the 1 kHz left tone
+  but not the 440 Hz right tone. The top jack has not been tested.
+
+Not explained:
+
+- **Tone with the plug fully in:** the same plug position gave both silence and tone,
+  so plug position did not predict the result. With the wiring above, a fully
+  inserted TS plug should read as silent.
+- **Level:** −68.1 dBFS was the highest level seen at any position, and it switched
+  on and off with little in between, which looks more like an intermittent contact.
+  No reference exists for what a correctly wired jack would read in this setup, and
+  the bitcrushing may affect these numbers.
+
+### Still to do
+
+With the power off and a plug fully inserted in the bottom jack, measure continuity:
+
+| Plug contact | If swapped | If correct |
+|---|---|---|
+| Tip | `AVSS` (`EXP5` pin 2) | `EXP5` pin 3 |
+| Ring | `EXP5` pin 1 | `EXP5` pin 1 |
+| Sleeve | `EXP5` pin 3 | `AVSS` (`EXP5` pin 2) |
+
+Repeat on the top jack with `EXP6`. Repeating the loopback is also worthwhile once the
+clocks are fixed (C97), with a TRS cable as the control.
 
 ### Workaround
 
