@@ -10,6 +10,7 @@ revision.
 | [ERR-002](#err-002--teensycodec-i²s-signals-rotated-across-the-isolator) | Audio / I²S data path | **Blocking** — no audio in either direction | Open, hardware rework required |
 | [ERR-003](#err-003--rj45-jacks-split-the-two-middle-ethernet-pairs) | Ethernet / both ports | **Degraded** — links fall back to 100 Mbit/s | Open, adapter patch cord restores gigabit |
 | [ERR-004](#err-004--ethernet-controllers-have-no-mac-address) | Ethernet / both ports | **Minor** — random MAC address at every boot | Open, software workaround in place |
+| [ERR-005](#err-005--line-output-jacks-have-tip-and-sleeve-swapped) | Audio / line outputs | **Degraded** — line outputs unusable with normal cables | Draft, not yet measured or reviewed |
 
 ---
 
@@ -471,3 +472,82 @@ address allocated for each port.
 Either program each controller's eFuse at production with an allocated MAC
 address (two per board), or add a `93C46` EEPROM per controller and program
 those.
+
+---
+
+## ERR-005 — Line output jacks have tip and sleeve swapped
+
+> **Draft, for review by Laurence.** The root cause comes from the design files and
+> listening tests. It has not been confirmed by a continuity measurement.
+
+**Subsystem:** Audio — line outputs (`J12`, Neutrik `NSJ12HF-1`)
+**Severity:** Degraded. The line outputs do not work with normal TS or TRS cables.
+The monitor output (`J7`) is not affected.
+**Affects:** Revision A0, schematic-level, so every board is expected to be
+affected. Observed on one board (`pandore16`).
+**Status:** Draft. Open, no fix chosen. Firmware cannot fix this.
+
+### Symptom
+
+Both jacks behave the same way:
+
+- **TS plug:** sound only when the plug is not pushed all the way in. Fully
+  inserted, the output is silent.
+- **Stereo headphones on a TRS plug, fully inserted:** sound in the right ear only.
+
+This was first taken for an active codec mute, because the jacks seemed silent.
+
+### Root cause
+
+`J12` connects tip to ground and sleeve to the hot signal, on both of its jacks.
+The line inputs show the expected assignment:
+
+| Contact | `J12` bottom (`OUTL`) | `J12` top (`OUTR`) | Inputs `J4`, `J5` |
+|---|---|---|---|
+| Tip | `TB` = **`AVSS`** | `TT` = **`AVSS`** | `T` = `LINE.SIG+` |
+| Ring | `RB` = `OUTL.SIG-` | `RT` = `OUTR.SIG-` | `R` = `LINE.SIG-` |
+| Sleeve | `SB` = **`OUTL.SIG+`** | `ST` = **`OUTR.SIG+`** | `S` = `AVSS` |
+
+This explains both symptoms:
+
+- **TS plug, fully inserted:** the plug's sleeve bridges the ring and sleeve
+  contacts, which shorts `SIG+` to `SIG-` through the 100 Ω output resistors
+  (`R80`, `R81`) and leaves almost no signal. The 100 µF output capacitors
+  (`C122`, `C127`, `C137`, `C138`) block DC, so this should not be harmful.
+- **TS plug, partly inserted:** the plug's tip sits on the ring contact (`SIG-`)
+  and its body on the sleeve contact (`SIG+`), so signal gets through.
+- **Stereo headphones:** the right ear sits across `SIG+` and `SIG-`, and the left
+  ear between `SIG+` and ground. With 100 Ω output resistors and 32 Ω headphones,
+  the left ear works out about 14 dB quieter. This figure is calculated, not
+  measured.
+
+### Evidence
+
+- `hw/pandore.kicad_pcb`: the pad nets of `J12`, `J4` and `J5` in the table above.
+- Neutrik drawing `ST-NSJ12HF-1`: `TT`, `RT` and `ST` are 20.48, 14.13 and 7.78 mm
+  from the panel, so `T` is the contact deepest in the jack, which is the tip. The
+  footprint matches, so the pad names are not a labelling mix-up.
+- Listening tests on `pandore16`, above, on both jacks.
+
+**Still to do:** with the power off, check that a plug's tip reads as connected to
+`AVSS`. A check of the ring and sleeve contacts against `EXP5` and `EXP6` would
+complete it.
+
+### Workaround
+
+Neither of these has been tried yet.
+
+- **Headers `EXP5` (`OUTL`) and `EXP6` (`OUTR`):** these carry the signals directly,
+  with pin 1 = `SIG-`, pin 2 = `AVSS`, pin 3 = `SIG+`. They bypass the jack wiring.
+- **Cross-wired adapter:** from a TRS plug in `J12`, connect plug sleeve to the
+  destination's tip, plug ring to its ring, and plug tip to its sleeve.
+
+Do not use a standard balanced TRS cable. Its sleeve is normally the shield, so the
+receiving equipment could ground `SIG+` through it.
+
+### Fix for Rev B
+
+Connect `TB` and `TT` to `SIG+`, and `SB` and `ST` to `AVSS`, matching `J4` and
+`J5`.
+
+Whether existing boards can be reworked is still to be decided.
