@@ -58,8 +58,14 @@ What was heard, on both jacks:
   wiring, the left ear is expected to be about 14 dB quieter at 32 Ω. A correctly
   wired jack would play about equally in both ears.
 
-Each jack carries one channel (bottom left, top right), so mono from one jack is
-expected.
+Each jack carries one channel, so mono from one jack is expected. The bottom jack
+is measured as left. The top jack is right according to the pad names, but has not
+been tested.
+
+A loopback test from the bottom jack into J4 was **inconclusive**. A fully inserted
+TS plug read as silent in two runs but passed a faint tone (−68 dBFS) in another,
+which the swap does not explain. The swap therefore stays unconfirmed until
+continuity is measured. The results are in ERR-005.
 
 ## Confirmed
 
@@ -75,8 +81,8 @@ expected.
 
 ## Not proven
 
-- **J12 wiring:** the swap explains both listening tests, but continuity has not
-  been measured. With the power off, a plug's tip should read as connected to AVSS.
+- **J12 wiring:** the swap explains both listening tests but not every loopback
+  result, and continuity has not been measured. With the power off, a plug's tip should read as connected to AVSS.
 - **Mute state:** an earlier theory blamed the silent line outputs on the codec's
   mute. That is now unlikely: a powered-down buffer would only leak through about
   10 kΩ, which should be close to inaudible on headphones. The state of the mute
