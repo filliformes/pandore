@@ -10,8 +10,10 @@
 //
 //  Pensé pour être manipulé de façon robuste :
 //   * parois et plancher de 3 mm ;
-//   * nervures triangulaires (qui s'épaississent vers le bas) sur chaque
-//     languette mince entre deux ports, ex. entre les deux USB ;
+//   * nervures en losange sur chaque languette mince entre deux ports
+//     (ex. entre les deux USB) : saillie maximale à la hauteur de la carte,
+//     là où la languette prend racine, puis elles se résorbent pour
+//     affleurer au bas du fond ;
 //   * congés au pied des plots ;
 //   * côté droit : une seule grande ouverture (DIO/AIO, Grove, VIN) au lieu
 //     de languettes de 1,5 mm qui casseraient.
@@ -72,12 +74,14 @@ port_teensy = true;
 fente_borniers = true;
 
 /* [Renforts] */
-// Nervures triangulaires sur les languettes minces entre deux ports
+// Nervures en losange sur les languettes minces entre deux ports
 nervures = true;
 // Une languette plus étroite que ça reçoit une nervure
 seuil_nervure = 8; // [2:0.5:20]
-// Saillie de la nervure en bas (vers l'extérieur)
-nervure_bas = 6; // [1:0.5:12]
+// Saillie maximale de la nervure (vers l'extérieur)
+nervure_max = 6; // [1:0.5:12]
+// Hauteur de la saillie maximale, par rapport au dessus de la carte (0 = carte ; les fonds des U sont entre -2,3 et +2,9)
+nervure_z_max = 0; // [-10:0.5:10]
 // Saillie de la nervure en haut du rebord
 nervure_haut = 1; // [0:0.25:4]
 // Congé au pied des plots
@@ -114,6 +118,11 @@ ZB = -PCB_T - hauteur_plots - plancher;     // dessous du fond
 FLOOR_TOP = ZB + plancher;
 RIM = hauteur_rebord;                        // dessus du rebord
 OUT_W = X1 - X0;  OUT_D = Y1 - Y0;  OUT_H = RIM - ZB;
+// nervures : bas (affleurant), saillie max, haut
+RIB_Z0 = ZB + chanfrein_bas;
+RIB_Z1 = RIM - chanfrein_haut;
+RIB_ZM = min(max(nervure_z_max, RIB_Z0 + 2), RIB_Z1 - 2);
+RIB_ANGLE = atan(nervure_max / (RIB_ZM - RIB_Z0));   // porte-à-faux du dessous, depuis la verticale
 
 function side_gap(s) = s == "back" ? gb : s == "front" ? gf : s == "right" ? gr : gl;
 // face extérieure / intérieure de chaque paroi, le long de sa normale sortante
@@ -157,13 +166,15 @@ TABS = concat(tabs_of("back"), tabs_of("front"), tabs_of("right"), tabs_of("left
 //  Rapport (console)
 // =====================================================================
 module rapport() {
-    echo(str("FOND DEVKIT V2  ", OUT_W, " x ", OUT_D, " x ", OUT_H, " mm  (+ nervures ", nervures ? nervure_bas : 0, " mm à l'arrière / avant)"));
-    if (OUT_W + (nervures && len(tabs_of("right")) + len(tabs_of("left")) > 0 ? nervure_bas : 0) > plateau)
+    echo(str("FOND DEVKIT V2  ", OUT_W, " x ", OUT_D, " x ", OUT_H, " mm  (+ nervures ", nervures ? nervure_max : 0,
+             " mm à hauteur de carte, affleurantes au plateau)"));
+    if (OUT_W + (nervures ? ((len(tabs_of("right")) > 0 ? nervure_max : 0) + (len(tabs_of("left")) > 0 ? nervure_max : 0)) : 0) > plateau)
         echo(str("ATTENTION : plus large que le plateau (", plateau, " mm)"));
     if (RIM < 14.2) echo("NOTE : le rebord est plus bas que les prises Ethernet (14,2 mm)");
     if (FLOOR_TOP > SSD_BOTTOM - 1.5) echo("ATTENTION : plots trop courts pour le SSD NVMe sous la carte");
     if ((plot_d - insert_d) / 2 < 1.4) echo("ATTENTION : paroi trop mince autour des inserts");
-    echo(str("  nervures : ", len(TABS), " languettes renforcées"));
+    echo(str("  nervures : ", len(TABS), " languettes renforcées, dessous à ", round(RIB_ANGLE), "° de la verticale"));
+    if (nervures && RIB_ANGLE > 45) echo("ATTENTION : dessous des nervures en porte-à-faux > 45°, il faudra des supports");
     echo(str("  fixation : 8 inserts M2.5 (trou ", insert_d, " x ", insert_long + 1,
              " mm) + 8 vis M2.5 x 6 tête bombée, par le dessus de la carte"));
 }
@@ -229,15 +240,18 @@ module openings() {
 }
 
 // =====================================================================
-//  Nervures : triangle collé à la face extérieure de chaque languette,
-//  fin en haut du rebord, épais en bas.
+//  Nervures : losange collé à la face extérieure de chaque languette.
+//  Fin en haut du rebord, saillie maximale à la hauteur de la carte (la
+//  racine de la languette, là où elle casserait), puis il se résorbe pour
+//  affleurer la paroi au bas du fond : rien ne dépasse au plateau.
 // =====================================================================
 module rib(side, u, w) {
     ww = max(w - 0.3, 1.2);
     // repère local : x = le long de la paroi, y = vers l'extérieur, z = haut
     module wedge() hull() {
-        translate([-ww / 2, -0.6, ZB]) cube([ww, nervure_bas + 0.6, EPS]);
-        translate([-ww / 2, -0.6, RIM - chanfrein_haut - EPS]) cube([ww, nervure_haut + 0.6, EPS]);
+        translate([-ww / 2, -0.6, RIB_Z0]) cube([ww, 0.5, EPS]);                       // affleurant (0,1 dans la paroi)
+        translate([-ww / 2, -0.6, RIB_ZM]) cube([ww, nervure_max + 0.6, EPS]);
+        translate([-ww / 2, -0.6, RIB_Z1 - EPS]) cube([ww, nervure_haut + 0.6, EPS]);
     }
     if (side == "back")       translate([u, Y1, 0]) wedge();
     else if (side == "front") translate([u, Y0, 0]) rotate([0, 0, 180]) wedge();

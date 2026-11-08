@@ -4,7 +4,7 @@ Un fond monobloc pour transporter et manipuler le Pandore Rev A0 sans stress. C'
 
 - **Rebord sur tout le contour**, à la hauteur des prises Ethernet (15 mm au-dessus de la carte). Il protège tout ce qui ne devrait pas s'accrocher au pouce. Les XLR et le haut de la carte dépassent, c'est voulu.
 - **Ports ouverts en U vers le haut**, pour déposer et retirer la carte sans rien démonter.
-- **Pensé pour être manipulé de façon robuste.** Parois et plancher de 3 mm. Chaque languette mince entre deux ports, par exemple entre les deux USB, a une nervure triangulaire qui s'épaissit vers le bas. Les plots ont un congé à leur pied.
+- **Pensé pour être manipulé de façon robuste.** Parois et plancher de 3 mm. Chaque languette mince entre deux ports, par exemple entre les deux USB, a une nervure en losange : saillie maximale (6 mm) à la hauteur de la carte, là où la languette prend racine et casserait, puis elle se résorbe pour affleurer la paroi au bas du fond. Les plots ont un congé à leur pied.
 - **Côté droit :** une seule grande ouverture pour DIO, AIO, Grove et VIN, au lieu de languettes de 1,5 mm qui casseraient.
 - **Aucun texte**, ni sur les faces ni dessous.
 
@@ -43,8 +43,8 @@ Au plot MNT6 (arrière gauche), l'axe du potentiomètre de volume passe à 3,5 m
 
 ## Impression (QIDI Q2)
 
-- **Dimensions :** 267,2 × 119,7 × 31,1 mm, plus 6 mm de nervures à l'arrière et à l'avant. Ça tient sur le plateau de 270 mm de la Q2. Il reste peu de marge en largeur : désactive jupe et bordure.
-- **Orientation :** à plat sur le plancher, tel qu'exporté. Aucun support : les U sont ouverts vers le haut et les nervures s'élargissent vers le bas.
+- **Dimensions :** 267,2 × 119,7 × 31,1 mm, plus 6 mm de nervures à l'arrière et à l'avant à la hauteur de la carte (rien ne dépasse au plateau). Ça tient sur le plateau de 270 mm de la Q2. Il reste peu de marge en largeur : désactive jupe et bordure.
+- **Orientation :** à plat sur le plancher, tel qu'exporté. Aucun support : les U sont ouverts vers le haut, et le dessous des nervures ne fait que 22° avec la verticale (la console avertit si un réglage dépasse 45°).
 
 ## Réglages utiles
 
@@ -52,7 +52,8 @@ Au plot MNT6 (arrière gauche), l'axe du potentiomètre de volume passe à 3,5 m
 |---|---|
 | `hauteur_rebord` | Hauteur du rebord au-dessus de la carte (14,2 = dessus des prises Ethernet) |
 | `seuil_nervure` | Les languettes plus étroites que ça reçoivent une nervure |
-| `nervure_bas`, `nervure_haut` | Saillie de la nervure en bas et en haut |
+| `nervure_max`, `nervure_haut` | Saillie de la nervure au plus large et en haut du rebord |
+| `nervure_z_max` | Hauteur du plus large, par rapport au dessus de la carte (0 = carte ; les fonds des U sont entre −2,3 et +2,9 mm) |
 | `paroi`, `plancher` | Épaisseurs |
 | `fusion_droite` | Une seule ouverture côté droit, ou une par connecteur |
 | `insert_d`, `insert_long` | Taille des inserts M2.5 |
